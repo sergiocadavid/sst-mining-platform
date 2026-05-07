@@ -65,7 +65,7 @@
 
     <header>
         <div>
-            <h1>Centro de Control LLM</h1>
+            <h1>Centro de Control LLM <span id="api-status-dot" style="display:inline-block; width:14px; height:14px; background:#ef4444; border-radius:50%; margin-left:10px; box-shadow: 0 0 8px #ef4444; transition: all 0.3s ease;" title="Verificando Worker..."></span></h1>
             <p style="margin: 0.5rem 0 0 0; color: #94a3b8; font-size: 0.9rem;">Plataforma Integrada: Cloudflare Workers AI</p>
         </div>
         <div style="display: flex; gap: 1rem; flex-direction:column; align-items:end;">
@@ -151,6 +151,7 @@
 
         async function pingIA() {
             const btn = document.getElementById('btn-reconectar');
+            const dot = document.getElementById('api-status-dot');
             btn.innerText = "⏳ Verificando Servidor...";
             try {
                 let r = await fetch(DOMAIN + '/ping-ia');
@@ -158,13 +159,20 @@
                 if(j.status === "ONLINE") {
                     btn.innerText = "✅ IA Conectada";
                     btn.style.background = "#10b981";
+                    if(dot) {
+                        dot.style.background = "#10b981";
+                        dot.style.boxShadow = "0 0 8px #10b981";
+                        dot.title = "Worker Conectado";
+                    }
                 } else {
                     btn.innerText = "❌ IA Desconectada";
                     btn.style.background = "#ef4444";
+                    if(dot) { dot.style.background = "#ef4444"; dot.style.boxShadow = "0 0 8px #ef4444"; }
                 }
             } catch(e) {
                 btn.innerText = "❌ Error Red";
                 btn.style.background = "#ef4444";
+                if(dot) { dot.style.background = "#ef4444"; dot.style.boxShadow = "0 0 8px #ef4444"; }
             }
             setTimeout(() => { btn.innerText = "🔄 Reconectar IA"; btn.style.background = "#334155"; }, 2500);
         }
@@ -519,6 +527,7 @@
         fetchActivos();
         renderTurnoLocal();
         fetchReportsCloud();
+        pingIA(); // Verificar estado del Worker al cargar
         setInterval(fetchReportsCloud, 8000); 
     </script>
 </body>
