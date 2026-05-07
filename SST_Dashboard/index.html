@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SST Dashboard - Cloudflare AI</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --text-color: #f8fafc;
+            --card-bg: rgba(30, 41, 59, 0.7);
+            --accent-alert: #ef4444;
+            --accent-ok: #10b981;
+            --glass-border: rgba(255, 255, 255, 0.1);
+        }
+        body { font-family: 'Outfit', sans-serif; background: linear-gradient(135deg, #020617 0%, #0f172a 100%); color: var(--text-color); margin: 0; padding: 2rem; min-height: 100vh; }
+        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; padding-bottom: 1rem; border-bottom: 1px solid var(--glass-border); }
+        h1 { font-weight: 800; letter-spacing: -1px; margin: 0; background: linear-gradient(90deg, #38bdf8, #818cf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .status-badge { background: rgba(16, 185, 129, 0.2); color: var(--accent-ok); padding: 0.5rem 1rem; border-radius: 999px; font-weight: 600; font-size: 0.85rem; border: 1px solid rgba(16, 185, 129, 0.5); }
+        .offline-badge { background: rgba(245, 158, 11, 0.2); color: #f59e0b; padding: 0.5rem 1rem; border-radius: 999px; font-weight: 600; font-size: 0.85rem; border: 1px solid rgba(245, 158, 11, 0.5); }
+        .mic-btn {
+            background: linear-gradient(90deg, #10b981, #059669); font-size: 1.2rem; padding: 1.5rem 3rem;
+            color: white; border: none; border-radius: 999px; font-weight: 600; cursor: pointer;
+            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4); width: 100%; max-width: 600px;
+            transition: transform 0.2s, box-shadow 0.2s; display: flex; align-items: center; justify-content: center; gap: 0.5rem;
+        }
+        .mic-btn:hover { filter: brightness(1.1); transform: translateY(-2px); }
+        #btn-cerrar-turno { background: linear-gradient(90deg, #10b981, #059669); font-size: 1.1rem; padding: 1.2rem 2.5rem; color:white; font-weight:bold; border:none; box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4); border-radius: 8px; cursor: pointer; transition: all 0.2s; }
+        #btn-cerrar-turno:hover { filter: brightness(1.1); transform: translateY(-2px); box-shadow: 0 6px 20px rgba(16, 185, 129, 0.6); }
+        #btn-limpiar-turno { background: transparent; font-size: 0.9rem; padding: 0.8rem 1.5rem; border-radius: 8px; border: 1px solid #ef4444; color: #ef4444; cursor: pointer; font-weight: bold; transition: all 0.2s; }
+        #btn-limpiar-turno:hover { background: rgba(239, 68, 68, 0.1); }
+        @keyframes pulseREC { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
+        @keyframes recordingPulse { 0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.6); background: #ef4444; } 70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); background: #f87171; } 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); background: #ef4444; } }
+        .btn-recording { animation: recordingPulse 1.5s infinite; color: white !important; }
+        .assets-slider { display: flex; overflow-x: auto; gap: 1rem; padding-bottom: 1rem; }
+        .assets-slider::-webkit-scrollbar { height: 8px; }
+        .assets-slider::-webkit-scrollbar-track { background: rgba(255,255,255,0.05); border-radius: 4px; }
+        .assets-slider::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 4px; }
+        .asset-card { background: var(--card-bg); border: 1px solid var(--glass-border); border-radius: 12px; padding: 1.2rem; display: flex; flex-direction: column; justify-content: space-between; min-width: 250px; }
+        .btn-inspect { background: linear-gradient(90deg, #38bdf8, #818cf8); border: none; color: white; padding: 0.5rem; border-radius: 6px; font-weight: bold; cursor: pointer; margin-top: 1rem; transition: all 0.2s; }
+        .btn-inspect:hover { filter: brightness(1.1); transform: translateY(-2px); }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 1.5rem; }
+        .report-card { background: var(--card-bg); backdrop-filter: blur(12px); border: 1px solid var(--glass-border); border-radius: 16px; padding: 1.5rem; position: relative; overflow: hidden; animation: slideIn 0.4s ease-out; }
+        @keyframes slideIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        .report-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px; }
+        .status-CRITICAL::before { background: var(--accent-alert); }
+        .status-OK::before { background: var(--accent-ok); }
+        .status-ALERTA::before { background: #f59e0b; }
+        .status-MANTENIMIENTO::before { background: #eab308; }
+        .status-FALLA::before { background: #991b1b; }
+        .status-PENDIENTE::before { background: #94a3b8; }
+        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+        .id-badge { font-size: 0.75rem; color: #94a3b8; font-family: monospace; }
+        .equipment { font-size: 1.25rem; font-weight: 600; margin: 0 0 0.5rem 0; }
+        .issue { color: #cbd5e1; font-size: 0.95rem; line-height: 1.5; margin-bottom: 1.5rem; }
+        .confidence-bar { width: 100%; height: 6px; background: #334155; border-radius: 999px; margin-bottom: 1rem; }
+        .confidence-fill { height: 100%; background: linear-gradient(90deg, #818cf8, #38bdf8); border-radius: 999px; }
+        .empty-state { grid-column: 1 / -1; text-align: center; padding: 4rem; color: #64748b; border: 2px dashed #334155; border-radius: 8px;}
+        .section-title { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; padding-bottom: 0.5rem; margin-top: 3rem; margin-bottom: 1.5rem;}
+        #log-whisper { background: #1e293b; padding: 0.8rem; border-radius: 8px; font-family: monospace; font-size: 0.8rem; margin-bottom: 1rem; max-height: 120px; overflow-y: auto;}
+    </style>
+</head>
+<body>
+
+    <header>
+        <div>
+            <h1>Centro de Control LLM</h1>
+            <p style="margin: 0.5rem 0 0 0; color: #94a3b8; font-size: 0.9rem;">Plataforma Integrada: Cloudflare Workers AI</p>
+        </div>
+        <div style="display: flex; gap: 1rem; flex-direction:column; align-items:end;">
+            <div class="status-badge" id="conn-status">📡 ONLINE - Hub Estable</div>
+            <div class="offline-badge" id="local-status">💾 ALMACENAMIENTO LOCAL ACTIVO</div>
+        </div>
+    </header>
+
+    <div style="display: flex; justify-content: center; flex-direction: column; align-items: center; gap: 1rem; width: 100%; margin-bottom: 2rem;">
+        <button id="btn-master-mic" class="mic-btn">
+            ▶️ INICIAR AUDIO E INFERENCIA CLOUDFLARE AI
+        </button>
+        <div id="rec-indicator" style="display: none; color: #ef4444; font-weight: bold; font-size: 1.1rem; align-items: center; gap: 0.5rem; animation: pulseREC 1.5s infinite;">
+            <div style="width: 12px; height: 12px; background: #ef4444; border-radius: 50%;"></div> 🔴 STREAM DE AUDIO (VAD Silence Activo)
+        </div>
+        <div id="log-whisper" style="width: 100%; max-width: 600px; display:none;">Aguardando transcripción...</div>
+    </div>
+
+        <h2 style="font-size: 1.2rem; margin-bottom: 1rem; flex-grow:1;">📋 Maestro de Activos Individuales</h2>
+        <button id="btn-reconectar" style="background:#334155; color:white; border:none; padding:0.5rem 1rem; border-radius:6px; cursor:pointer;" onclick="pingIA()">🔄 Verificar Conexión</button>
+    </div>
+    <div class="assets-slider" id="assets-container">
+        <span style="color: #64748b;">Cargando inventario desde BBDD o Local...</span>
+    </div>
+
+    <div class="section-title">
+        <h2 style="font-size: 1.2rem; margin:0;">📝 Hoja de Turno en Borrador (Curaduría Cloudflare AI)</h2>
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <button id="btn-limpiar-turno">🗑 Limpiar</button>
+            <button id="btn-cerrar-turno">💾 FINALIZAR AUDITORÍA Y EMPAQUETAR PDF</button>
+        </div>
+    </div>
+    <main class="grid" id="local-reports-container">
+        <div class="empty-state">Tu turno está limpio. Inicia tus bloques de audio.</div>
+    </main>
+
+    <div class="section-title">
+        <h2 style="font-size: 1.1rem; color: #94a3b8; margin:0;">☁️ Histórico Sincronizado en la Nube</h2>
+    </div>
+    <main class="grid" id="cloud-reports-container" style="opacity: 0.7;"></main>
+
+    <script>
+        const DOMAIN = 'https://sst-worker.secg2022.workers.dev';
+        const API_REPORTS = DOMAIN + '/reports';
+        const API_ACTIVOS = DOMAIN + '/activos';
+        const PUSH_URL = DOMAIN + '/sync-reports';
+        const AUDIO_URL = DOMAIN + '/process-audio';
+        
+        const cLocal = document.getElementById('local-reports-container');
+        const cCloud = document.getElementById('cloud-reports-container');
+        const cAssets = document.getElementById('assets-container');
+        const btnMasterMic = document.getElementById('btn-master-mic');
+        const indRec = document.getElementById('rec-indicator');
+        const logger = document.getElementById('log-whisper');
+        
+        // VAD y Audio Context
+        let audioContext;
+        let mediaStream;
+        let mediaRecorder;
+        let audioChunks = [];
+        let isRecording = false;
+        let activeAsset = null; // 'BATCH' o String ID
+
+        let analyser;
+        let dataArray;
+        let silenceTimer = null;
+        let isSilent = true;
+
+        // DUMMY FALLBACK si API falla
+        const ALIAS_MAP = [
+            { id: "EX-001", regex: /(extintor|estintor|intorpec[uú]|pecuese|pqs).*?(1|uno|001|12|norte|bocamina)/i, name: "Extintor PQS 12Kg" },
+            { id: "EX-002", regex: /(extintor|estintor).*?(2|dos|002|co2|taller)/i, name: "Extintor CO2 9Kg" },
+            { id: "EX-003", regex: /(extintor|estintor).*?(3|tres|003|50.*?kg|carretilla|refugio)/i, name: "Extintor PQS 50Kg" },
+            { id: "V-01", regex: /(ventilador.*?(1|uno|01|principal|500))/i, name: "Ventilador Principal 500HP" },
+            { id: "V-02", regex: /(ventilador.*?(2|dos|02|secundario|axial))/i, name: "Ventilador Secundario Axial" },
+            { id: "V-03", regex: /(extractor|viciado|chimenea)/i, name: "Extractor de Aire Viciado" },
+            { id: "S-GAS-05", regex: /(sensor.*?gas|multigas|calidad.*?aire|gas.*?(5|cinco|05)|metano|oxigeno)/i, name: "Sensor Electrónico Multigas" },
+            { id: "S-TEMP-01", regex: /(termohigr[oó]metro|temperatura|humedad|termostato)/i, name: "Termohigrómetro Industrial" },
+            { id: "FAJA-A1", regex: /(faja|transportadora|estructural|faja.*?(1|uno|a1|a-1))/i, name: "Faja Transportadora Estructural" },
+            { id: "SCOOP-07", regex: /(cargador|frontal|scoop|scooptram|lhd)/i, name: "Cargador Frontal LHD" },
+            { id: "LOCO-04", regex: /(locomotora|trolley|tren)/i, name: "Locomotora Trolley" }
+        ];
+
+        async function pingIA() {
+            const btn = document.getElementById('btn-reconectar');
+            btn.innerText = "⏳ Verificando Servidor...";
+            try {
+                let r = await fetch(DOMAIN + '/ping-ia');
+                let j = await r.json();
+                if(j.status === "ONLINE") {
+                    btn.innerText = "✅ IA Conectada";
+                    btn.style.background = "#10b981";
+                } else {
+                    btn.innerText = "❌ IA Desconectada";
+                    btn.style.background = "#ef4444";
+                }
+            } catch(e) {
+                btn.innerText = "❌ Error Red";
+                btn.style.background = "#ef4444";
+            }
+            setTimeout(() => { btn.innerText = "🔄 Reconectar IA"; btn.style.background = "#334155"; }, 2500);
+        }
+
+        function getTurnoLocal() { let data = localStorage.getItem('sst_turno'); return data ? JSON.parse(data) : []; }
+        function saveTurnoLocal(arr) { localStorage.setItem('sst_turno', JSON.stringify(arr)); }
+
+        function renderTurnoLocal() {
+            let data = getTurnoLocal();
+            cLocal.innerHTML = '';
+            if (data.length === 0) {
+                cLocal.innerHTML = '<div class="empty-state">Tu turno está vacío. Inicia tus dictados de voz y la IA los interpretará.</div>';
+                document.getElementById('local-status').innerText = '💾 0 Hallazgos en Caché';
+                return;
+            }
+
+            document.getElementById('local-status').innerText = '💾 ' + data.length + ' Hallazgos Procesados por la IA';
+
+            data.forEach((r, idx) => {
+                cLocal.innerHTML += `
+                    <div class="report-card status-${r.status}" style="box-shadow: 0 0 15px rgba(56, 189, 248, 0.1);">
+                        <div class="card-header">
+                            <span class="id-badge">CF_AI_ID_#${idx}</span>
+                            <span style="font-size: 0.75rem; padding: 0.2rem 0.6rem; border-radius: 4px; font-weight: bold; background: rgba(56, 189, 248, 0.2); color: #38bdf8;">${r.status}</span>
+                        </div>
+                        <h3 class="equipment">${r.equipment}</h3>
+                        <p class="issue">${r.component_failed} - <b>Acción Técnica:</b> ${r.action_required}</p>
+                        
+                        <div style="font-size: 0.7rem; display: flex; justify-content: space-between; margin-bottom: 0.3rem;">
+                            <span>Confianza Inferencia Whisper / Llama (${(r.confidence_score * 100).toFixed(0)}%)</span>
+                        </div>
+                        <div class="confidence-bar">
+                            <div class="confidence-fill" style="width: ${r.confidence_score * 100}%"></div>
+                        </div>
+                        
+                        <div style="background: rgba(15, 23, 42, 0.5); padding: 0.8rem; border-radius: 8px; font-size: 0.85rem; font-style: italic; color: #94a3b8; margin-bottom: 1rem;">
+                            Audio Crudo: " ${r.raw_stt_transcription} "
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        async function initAudio() {
+            try {
+                mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const source = audioContext.createMediaStreamSource(mediaStream);
+                
+                analyser = audioContext.createAnalyser();
+                analyser.fftSize = 512;
+                const bufferLength = analyser.frequencyBinCount;
+                dataArray = new Uint8Array(bufferLength);
+                source.connect(analyser);
+
+                mediaRecorder = new MediaRecorder(mediaStream);
+
+                mediaRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
+                mediaRecorder.onstop = async () => {
+                    const blob = new Blob(audioChunks, { type: 'audio/webm' });
+                    audioChunks = []; // reset
+                    if(blob.size > 1000) { // ignorar artefactos super pequeños
+                        await uploadToAI(blob, activeAsset);
+                    }
+                };
+
+            } catch (err) {
+                alert("Bloqueo de Audio: Por API local sin SSL, habilite micrófono o use 127.0.0.1 en vez de localhost.");
+                console.error(err);
+            }
+        }
+
+        function checkSilenceVAD() {
+            if (!isRecording) return;
+            
+            analyser.getByteFrequencyData(dataArray);
+            let sum = 0;
+            for(let i=0; i<dataArray.length; i++) sum += dataArray[i];
+            let avg = sum / dataArray.length;
+            
+            if (avg > 15) { // Threshold de voz
+                if (isSilent) {
+                    isSilent = false;
+                    clearTimeout(silenceTimer);
+                    logger.innerHTML += `<br/><span style="color:#10b981;">[VAD] Habla detectada...</span>`;
+                    logger.scrollTop = logger.scrollHeight;
+                }
+            } else { // Silencio
+                if (!isSilent) {
+                    isSilent = true;
+                    // VAD Timeout (1.5 segundos)
+                    silenceTimer = setTimeout(() => {
+                        logger.innerHTML += `<br/><span style="color:#ef4444;">[VAD] Silencio. Cortando chunk de audio y enviando a Whisper/LLM...</span>`;
+                        logger.scrollTop = logger.scrollHeight;
+                        
+                        // Detener la grabación actual para que se envíe el Blob y rearrancar instantáneamente
+                        if (mediaRecorder && mediaRecorder.state === 'recording') {
+                            mediaRecorder.stop();
+                            mediaRecorder.start(); // Sigue grabando para la siguiente frase
+                        }
+                    }, 1500); 
+                }
+            }
+            requestAnimationFrame(checkSilenceVAD);
+        }
+
+        async function uploadToAI(blob, contextID) {
+            let fd = new FormData();
+            fd.append('audio', blob, "chunk.webm");
+            if(contextID && contextID !== 'BATCH') {
+                fd.append('asset_id', contextID);
+            }
+
+            try {
+                logger.innerHTML += `<br/><span style="color:#38bdf8;">[HTTP POST] Enviando Buffer a /process-audio (Inferencia LLM en progreso...)</span>`;
+                logger.scrollTop = logger.scrollHeight;
+                
+                // Si había un botón específico presionado, pasarlo al estado analizando
+                if(contextID && contextID !== 'BATCH') {
+                    const b = document.getElementById('btn-'+contextID);
+                    if(b) b.innerText = '⚙️ Cloudflare AI Inferencia...';
+                } else {
+                    btnMasterMic.innerHTML = '⚙️ LLM PROCESANDO...';
+                }
+
+                let res = await fetch(AUDIO_URL, { method: 'POST', body: fd });
+                let json;
+                try {
+                    json = await res.json();
+                } catch (e) {
+                    throw new Error("HTTP " + res.status);
+                }
+                if (!res.ok) throw new Error(json.message || json.error || "HTTP " + res.status);
+                
+                if (json.status === "SUCCESS" || json.status === "OFFLINE") {
+                    let currentShift = getTurnoLocal();
+                    let storedItems = 0;
+                    
+                    if (json.items && Array.isArray(json.items)) {
+                        json.items.forEach(i => { currentShift.push(i); storedItems++; });
+                    } else if (json.item) {
+                        currentShift.push(json.item); storedItems++;
+                    }
+                    
+                    saveTurnoLocal(currentShift);
+                    renderTurnoLocal();
+                    
+                    if(json.status === "OFFLINE") {
+                        logger.innerHTML += `<br/><strong style="color:#f59e0b;">[ALERTA: Cloudflare AI Worker falló. Transcripción Mantenida en Bruto (${storedItems} items)]</strong>`;
+                    } else {
+                        logger.innerHTML += `<br/><strong style="color:#10b981;">[LLM ENTIDADES EXTRAÍDAS: ${storedItems} activos deducidos]</strong>`;
+                    }
+                } else {
+                    logger.innerHTML += `<br/><span style="color:#94a3b8;">[WHISPER] Audio nulo o sin comandos perceptibles.</span>`;
+                }
+            } catch(e) {
+                logger.innerHTML += `<br/><span style="color:#ef4444;">[ERROR] Worker Serverless o Cloudflare AI falló: ${e.message || e}</span>`;
+            } finally {
+                // Return button to normal if stopped
+                if (contextID && contextID !== 'BATCH') {
+                    const b = document.getElementById('btn-'+contextID);
+                    if(b) { b.innerText = '🎙️ Añadir al Turno'; b.classList.remove('btn-recording'); }
+                } else {
+                    if (!isRecording) {
+                        btnMasterMic.innerHTML = '▶️ INICIAR AUDIO E INFERENCIA CLOUDFLARE AI';
+                    }
+                }
+                logger.scrollTop = logger.scrollHeight;
+            }
+        }
+
+        async function startVoiceInspection(id, type) {
+            if (!mediaRecorder) await initAudio();
+            
+            if (isRecording) {
+                // Parar si estaba grabando el general
+                toggleMasterMic();
+            }
+
+            activeAsset = id + " - " + type; 
+            audioChunks = [];
+            mediaRecorder.start();
+            isRecording = true;
+            
+            const btn = document.getElementById('btn-' + id);
+            btn.classList.add('btn-recording');
+            btn.innerText = '🔴 Escuchando Contexto... (Presiona de nuevo para enviar)';
+            
+            // Reemplazar onclick behavior para detenerlo manually
+            btn.onclick = () => { stopSpecificVoiceInspection(id, type, btn); };
+            logger.style.display = 'block';
+            logger.innerHTML += `<br/>Grabando muestra para Hardware Objetivo: ${activeAsset}...`;
+        }
+
+        function stopSpecificVoiceInspection(id, type, element) {
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+            }
+            isRecording = false;
+            element.classList.remove('btn-recording');
+            // Retornar comportamiento
+            element.onclick = () => { startVoiceInspection(id, type); };
+        }
+
+        async function toggleMasterMic() {
+            if (!mediaRecorder) await initAudio();
+            if (audioContext.state === 'suspended') await audioContext.resume();
+
+            if (!isRecording) {
+                isRecording = true;
+                activeAsset = 'BATCH';
+                audioChunks = [];
+                mediaRecorder.start();
+                
+                checkSilenceVAD(); // Iniciar Loop VAD Manual
+                
+                btnMasterMic.innerHTML = '⏹ DETENER MODO ESCUCHA CONTINUA';
+                btnMasterMic.style.background = '#ef4444';
+                btnMasterMic.style.boxShadow = '0 8px 25px rgba(239, 68, 68, 0.4)';
+                indRec.style.display = 'flex';
+                logger.style.display = 'block';
+                logger.innerHTML += `<br/><strong>Modo IA Continuo Cloudflare INICIADO...</strong>`;
+            } else {
+                isRecording = false;
+                if (mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+                clearTimeout(silenceTimer);
+                
+                btnMasterMic.innerHTML = '▶️ INICIAR AUDIO E INFERENCIA CLOUDFLARE AI';
+                btnMasterMic.style.background = 'linear-gradient(90deg, #10b981, #059669)';
+                btnMasterMic.style.boxShadow = '0 8px 25px rgba(16, 185, 129, 0.4)';
+                indRec.style.display = 'none';
+                logger.innerHTML += `<br/><strong>Modo Finalizado.</strong>`;
+            }
+        }
+
+        btnMasterMic.onclick = toggleMasterMic;
+        document.addEventListener('keydown', function(event) {
+            if (event.code === 'Space' && event.target === document.body && !event.repeat) {
+                event.preventDefault(); toggleMasterMic();
+            }
+        });
+
+        // -------------------------------------------------------------
+        document.getElementById('btn-limpiar-turno').onclick = () => {
+            if (confirm("¿Estás seguro de descartar tus deducciones del Generative AI de este turno?")) {
+                localStorage.removeItem('sst_turno');
+                renderTurnoLocal();
+            }
+        };
+
+        const btnCerrarTurno = document.getElementById('btn-cerrar-turno');
+        btnCerrarTurno.onclick = async () => {
+            let t = getTurnoLocal();
+            if (t.length === 0) { alert("Tu borrador está vacío. No hay nada para empaquetar."); return; }
+
+            btnCerrarTurno.innerText = '⏳ Generando PDF Formales...';
+            try {
+                let res = await fetch(PUSH_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Idempotency-Key': 'bulk-' + Date.now() },
+                    body: JSON.stringify({ items: t })
+                });
+
+                if (res.ok) {
+                    const blob = await res.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.style.display = 'none';
+                    a.href = url;
+                    
+                    let dlName = "Auditoria_Minera_Cloudflare_Report.zip";
+                    const disposition = res.headers.get('Content-Disposition');
+                    if (disposition && disposition.indexOf('filename=') !== -1) {
+                        let matches = /filename="([^"]*)"/.exec(disposition);
+                        if (matches != null && matches[1]) dlName = matches[1];
+                    }
+                    
+                    a.download = dlName;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+
+                    localStorage.removeItem('sst_turno');
+                    renderTurnoLocal();
+                    fetchReportsCloud();
+                    btnCerrarTurno.innerText = '💾 FINALIZAR AUDITORÍA Y EMPAQUETAR PDF';
+                } else {
+                    alert("Error en el Backend de Reportes.");
+                    btnCerrarTurno.innerText = '💾 FINALIZAR AUDITORÍA Y EMPAQUETAR PDF';
+                }
+            } catch (err) {
+                alert("Sistema Backend Off.");
+                btnCerrarTurno.innerText = '💾 FINALIZAR AUDITORÍA Y EMPAQUETAR PDF';
+            }
+        };
+
+        function renderAssetsGrid(dataArr) {
+            cAssets.innerHTML = '';
+            dataArr.forEach(item => {
+                const styleBorder = item.Estado_Actual === 'FALLA_MENOR' ? 'border-color: #f59e0b;' : '';
+                cAssets.innerHTML += `
+                    <div class="asset-card" style="${styleBorder}">
+                        <div><h3 class="asset-title">${item.Tipo_Activo}</h3><div style="font-size: 0.8rem; color: #cbd5e1; margin-top: 0.5rem;">📍 ${item.Ubicacion_Exacta||'General'}</div></div>
+                        <button id="btn-${item.ID_unico}" class="btn-inspect" onclick="startVoiceInspection('${item.ID_unico}', '${item.Tipo_Activo}')">🎙️ Auditar Directamente (Cloudflare AI)</button>
+                    </div>
+                `;
+            });
+        }
+
+        async function fetchActivos() {
+            try {
+                const res = await fetch(API_ACTIVOS);
+                if (!res.ok) throw new Error("Offline HTTP");
+                const json = await res.json();
+                if (json.data && json.data.length > 0) renderAssetsGrid(json.data);
+                else throw new Error("BBDD Vacía");
+            } catch (e) {
+                // CARGA ESTÁTICA LOCAL (FALLBACK INAMOVIBLE DESDE EL MAPA INTERNO DE RESPALDO)
+                const fallbackData = ALIAS_MAP.map((a, i) => ({
+                    ID_unico: a.id, Tipo_Activo: a.name, Ubicacion_Exacta: "BBDD Offline - Inventario Caché", Estado_Actual: "OK"
+                }));
+                renderAssetsGrid(fallbackData);
+            }
+        }
+
+        async function fetchReportsCloud() {
+            try {
+                const response = await fetch(API_REPORTS);
+                if (!response.ok) throw new Error();
+                const json = await response.json();
+                document.getElementById('conn-status').innerText = '📡 ONLINE - Última Sync: ' + new Date().toLocaleTimeString();
+                document.getElementById('conn-status').style.background = 'rgba(16, 185, 129, 0.2)';
+                if (!json.data || json.data.length === 0) { cCloud.innerHTML = '<div class="empty-state">No hay Data Histórica en Nube</div>'; return; }
+                cCloud.innerHTML = '';
+                json.data.forEach(r => {
+                    cCloud.innerHTML += `
+                        <div class="report-card status-${r.ai_status}" style="box-shadow: none; border-color: rgba(255,255,255,0.05); filter: grayscale(50%);">
+                            <div class="card-header"><span class="id-badge">${r.id.substring(0, 15)}...</span><span style="font-size: 0.75rem; padding: 0.2rem 0.6rem; border-radius: 4px; font-weight: bold; background: rgba(51, 65, 85, 0.8);">${r.ai_status}</span></div>
+                            <h3 class="equipment" style="font-size: 1rem;">${r.equipment_name}</h3>
+                            <p class="issue" style="font-size: 0.85rem;">[NUBE IA] - ${r.ai_component_failed}</p>
+                            <div style="font-size: 0.8rem; color: #64748b;">" ${r.raw_stt_transcription} "</div>
+                        </div>
+                    `;
+                });
+            } catch (e) {
+                document.getElementById('conn-status').innerText = '⚠️ OFFLINE MODE / HUB APAGADO';
+                document.getElementById('conn-status').style.background = 'rgba(239, 68, 68, 0.2)';
+            }
+        }
+
+        fetchActivos();
+        renderTurnoLocal();
+        fetchReportsCloud();
+        setInterval(fetchReportsCloud, 8000); 
+    </script>
+</body>
+</html>

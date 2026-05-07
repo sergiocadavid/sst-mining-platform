@@ -1,0 +1,13 @@
+name = "sst-worker"
+main = "src/index.ts"
+compatibility_date = "2024-04-05"
+
+# Binding para Cloudflare AI
+[ai]
+binding = "AI"
+
+# Binding para Cloudflare D1
+[[d1_databases]]
+binding = "DB"
+database_name = "sst_db"
+database_id = "90b26fa8-4121-4c29-b78c-a53dadea658d"
