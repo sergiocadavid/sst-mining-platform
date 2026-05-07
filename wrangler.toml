@@ -11,3 +11,5 @@ binding = "AI"
 binding = "DB"
 database_name = "sst_db"
 database_id = "90b26fa8-4121-4c29-b78c-a53dadea658d"
+
+pages_build_output_dir = "SST_Dashboard"
